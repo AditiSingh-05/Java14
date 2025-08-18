@@ -14,5 +14,22 @@ public class Main {
         Employee employee2 = new Employee(2,"Doe", 60000);
         employee1.display();
         employee2.display();
+
+        SchoolStudent stud1 = new SchoolStudent(1, "Alice");
+        stud1.attend_class();
+        stud1.give_exam();
+
+        MyInterface obj1 = new MyInterface() {
+            @Override
+            public void print() {
+                System.out.println("Anonymous class implementing MyInterface");
+            }
+            @Override
+            public void show(){
+                System.out.println("Anonymous class showing something");
+            }
+
+        };
+
     }
 }
