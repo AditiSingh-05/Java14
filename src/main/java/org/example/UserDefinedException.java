@@ -1,7 +1,7 @@
 package org.example;
 
 import java.util.Scanner;
-
+//myexception2
 public class UserDefinedException {
     public static void main(String[] args) throws InvalidAgeException {
         Scanner sc = new Scanner(System.in);
