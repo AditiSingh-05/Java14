@@ -72,11 +72,21 @@ New → start() → Runnable → (CPU allocation) → Running → (completion) �
 **1. New State**
 - Created using `new Thread()` but `start()` not yet called
 - Thread object exists but not a thread of execution
+_The thread of execution, on the other hand, is the actual independent path of instructions: the real CPU-scheduled entity created by the JVM and recognized by the operating system._
+_Java allocates a Thread object on the heap -> It sets initial properties: NEW state, name, priority -> But it DOES NOT create an OS-level thread -> No stack is allocated -> No program counter is created -> No execution context exists._
 
 **2. Runnable State**
 - After calling `start()`, thread enters runnable state
 - Thread scheduler hasn't picked it yet for execution
 - Ready to run, waiting for CPU time
+ _The JVM asks the OS to create a new native thread.
+ That native thread receives:
+ • its own stack
+ • its own program counter
+ • its own scheduling slot
+ • memory for registers
+ The JVM marks the Java Thread state as RUNNABLE.
+ Then the OS eventually schedules it._
 
 **3. Running State**
 - Thread scheduler selects the thread from runnable pool
@@ -85,6 +95,19 @@ New → start() → Runnable → (CPU allocation) → Running → (completion) �
 **4. Non-Runnable (Blocked/Waiting) State**
 - Thread is alive but not eligible to run
 - Reasons: `sleep()`, `wait()`, blocked on I/O, waiting for lock
+_A Non-Runnable thread: Exists as a genuine OS-level thread. Has an active call stack and defined execution context. Does not consume CPU time—because the scheduler refuses to pick it up—until a specific condition is satisfied. By moving threads into non-runnable states instead of letting them “spin” or repeatedly check for a resource, the system: Frees up CPU for threads that can actually do work Minimizes wasted cycles and context switches. Scales with higher thread counts, preventing performance bottlenecks._
+
+_The Three Non Runnable States
+Blocked : A thread tries to enter a synchronized block or method, but another thread holds the desired lock (monitor).
+Waiting : Thread invokes wait(), join() (no timeout), or lower-level primitives like park(). If in a synchronized block, releases the lock and joins the wait set of the monitor. Remains dormant, without consuming CPU, until another thread invokes notify(), notifyAll(), or unpark(). Might wait forever if never notified—thus “indefinite.”.
+Timed Waiting :Thread calls timed methods like sleep(ms), wait(ms), join(ms), parkNanos(), or parkUntil(). Thread is suspended and handed to OS/thread scheduler along with a timer. Either woken by a notifier/condition or after the timer alarms. Ensures threads do not block indefinitely if a maximum wait time is specified._
+
+
+Q: What happens internally when a Java thread enters a blocked/waiting state?
+A: The thread is still considered “alive” by the JVM (it has a backing OS-level thread, stack, etc.) but is taken off the CPU scheduler’s eligible list until the blocking condition is resolved—either a lock is released, a timer expires, or another thread wakes it.
+
+Q: Why not use busy-spinning or polling instead of non-runnable states?
+A: Because that would waste CPU cycles, create contention, and severely limit scalability. Entering non-runnable states makes Java concurrency efficient, enabling thousands of threads to exist with minimal CPU impact.
 
 **5. Terminated (Dead) State**
 - Thread has completed its `run()` method
@@ -172,18 +195,20 @@ class MyRunnable implements Runnable {
 Pauses the thread for a specified time.
 
 ```java
+
 class SleepExample extends Thread {
     public void run() {
         for (int i = 1; i <= 5; i++) {
             try {
-                Thread.sleep(500); // Sleep for 500ms
+                Thread.sleep(5000); // Sleep for 500ms
             } catch (InterruptedException e) {
                 System.out.println(e);
             }
-            System.out.println(i);
+            System.out.println(i + "  "
+            + LocalDateTime.now().toString() + "  " + Thread.currentThread().getName());
         }
     }
-    
+
     public static void main(String[] args) {
         SleepExample t1 = new SleepExample();
         SleepExample t2 = new SleepExample();
@@ -191,9 +216,33 @@ class SleepExample extends Thread {
         t2.start();
     }
 }
+
+
+//Output : 
+1  2025-11-16T19:47:51.388694900  Thread-0
+1  2025-11-16T19:47:51.388694900  Thread-1
+2  2025-11-16T19:47:56.442938  Thread-0
+2  2025-11-16T19:47:56.442938  Thread-1
+3  2025-11-16T19:48:01.457263600  Thread-0
+3  2025-11-16T19:48:01.457263600  Thread-1
+4  2025-11-16T19:48:06.471559500  Thread-1
+4  2025-11-16T19:48:06.471559500  Thread-0
+5  2025-11-16T19:48:11.489996800  Thread-0
+5  2025-11-16T19:48:11.490508300  Thread-1
+
 ```
 
-**Output:** Numbers 1-5 printed by both threads with 500ms delay between each
+Q: What does Thread.sleep() do? Does it guarantee precise timing?
+A: It temporarily moves the current thread to TIMED_WAITING state, instructs the scheduler to ignore it for at least the specified period, and frees up CPU. Not precise—actual wake-up may be delayed due to system scheduling.
+
+Q: What happens if you use sleep() for coordinating threads?
+A: Coordination/synchronization with sleep() is unreliable. Use higher-level constructs (wait(), notify(), locks, latches) meant for correct thread interaction.
+
+Q: How is sleep() different from wait()?
+A: sleep() is static, always pauses current thread for specified (or more) time, retaining locks.
+wait() is called on an object (must own monitor), releases lock and waits to be notified or timeout.
+
+**Output:** Numbers 1-5 printed by both threads with 5000ms delay between each
 
 #### Naming Threads
 
